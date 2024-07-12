@@ -165,7 +165,7 @@ defmodule NebulexRedisAdapter.RedisCluster.ConfigManager do
     # Setup the cluster
     with {:ok, specs, conn_opts} <- get_cluster_shards(opts) do
       running_shards =
-        for {start, stop, m_host, m_port} <- specs do
+        for {start, stop, host, port, role} <- specs do
           # Define slot id
           slot_id = {:cluster_shards, start, stop}
 
@@ -176,8 +176,9 @@ defmodule NebulexRedisAdapter.RedisCluster.ConfigManager do
               slot_id: slot_id,
               registry: registry,
               pool_size: pool_size,
-              master_host: m_host,
-              master_port: m_port
+              host: host,
+              port: port,
+              role: role
             )
 
           # Define child spec
@@ -271,22 +272,27 @@ defmodule NebulexRedisAdapter.RedisCluster.ConfigManager do
 
           # coveralls-ignore-stop
 
-          [attrs | _] ->
-            host = attrs["endpoint"]
-            port = attrs["tls-port"] || attrs["port"]
+          attr_list ->
+            Enum.reduce(attr_list, acc, fn attrs, acc ->
+              host = attrs["endpoint"]
+              port = attrs["tls-port"] || attrs["port"]
+              role = attrs["role"]
 
-            slot_ranges
-            |> Enum.chunk_every(2)
-            |> Enum.reduce(acc, fn [start, stop], acc -> [{start, stop, host, port} | acc] end)
+              slot_ranges
+              |> Enum.chunk_every(2)
+              |> Enum.reduce(acc, fn [start, stop], acc ->
+                [{start, stop, host, port, role} | acc]
+              end)
+            end)
         end
 
       # Redis version < 7 (["CLUSTER", "SLOTS"])
       [start, stop, [host, port | _tail] = _master | _replicas], acc ->
-        [{start, stop, host, port} | acc]
+        [{start, stop, host, port, "master"} | acc]
     end)
-    |> Enum.map(fn {start, stop, host, port} ->
+    |> Enum.map(fn {start, stop, host, port, role} ->
       {maybe_convert_to_integer(start), maybe_convert_to_integer(stop),
-       maybe_override_host(host, config_endpoint, override?), port}
+       maybe_override_host(host, config_endpoint, override?), port, role}
     end)
   end
 
@@ -301,7 +307,7 @@ defmodule NebulexRedisAdapter.RedisCluster.ConfigManager do
 
       [attrs | acc]
     end)
-    |> Enum.filter(&(&1["role"] == "master" and &1["health"] == "online"))
+    |> Enum.filter(&(&1["health"] == "online"))
   end
 
   defp maybe_override_host(_host, config_endpoint, true) do

@@ -70,7 +70,7 @@ defmodule NebulexRedisAdapter.RedisCluster do
       |> :ets.lookup(:cluster_shards)
       |> Enum.reduce(init_acc, fn slot_id, acc ->
         registry
-        |> Pool.get_conn(slot_id, pool_size)
+        |> Pool.get_role_conn(slot_id, pool_size)
         |> Redix.command!(command, redis_command_opts(opts))
         |> reducer.(acc)
       end)
@@ -103,7 +103,7 @@ defmodule NebulexRedisAdapter.RedisCluster do
       |> :ets.lookup(:cluster_shards)
       |> Enum.reduce_while(nil, fn
         {_, start, stop} = slot_id, _acc when hash_slot >= start and hash_slot <= stop ->
-          {:halt, Pool.get_conn(registry, slot_id, pool_size)}
+          {:halt, Pool.get_role_conn(registry, slot_id, pool_size)}
 
         _, acc ->
           {:cont, acc}

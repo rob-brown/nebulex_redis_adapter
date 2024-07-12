@@ -21,18 +21,21 @@ defmodule NebulexRedisAdapter.RedisCluster.PoolSupervisor do
     slot_id = Keyword.fetch!(opts, :slot_id)
     registry = Keyword.fetch!(opts, :registry)
     pool_size = Keyword.fetch!(opts, :pool_size)
-    master_host = Keyword.fetch!(opts, :master_host)
-    master_port = Keyword.fetch!(opts, :master_port)
+    host = Keyword.fetch!(opts, :host)
+    port = Keyword.fetch!(opts, :port)
+    role = Keyword.fetch!(opts, :role)
+
+    key = {slot_id, role}
 
     conn_opts =
       opts
       |> Keyword.fetch!(:conn_opts)
       |> Keyword.delete(:url)
-      |> Keyword.put(:host, master_host)
-      |> Keyword.put(:port, master_port)
+      |> Keyword.put(:host, host)
+      |> Keyword.put(:port, port)
 
     children =
-      Pool.register_names(registry, slot_id, pool_size, fn conn_name ->
+      Pool.register_names(registry, key, pool_size, fn conn_name ->
         conn_opts = Keyword.put(conn_opts, :name, conn_name)
 
         Supervisor.child_spec({Redix, conn_opts}, id: {Redix, conn_name})
